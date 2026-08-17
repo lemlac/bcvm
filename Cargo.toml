@@ -10,6 +10,6 @@ authors = ["ported from lemlac/bcvm"]
 
 [features]
 default = []
-trace = []          # enable per-instruction stack + disassembly tracing
-gc_log = []         # log every GC cycle
-gc_stress = []      # force a collection on every allocation
+trace = [] # enable per-instruction stack + disassembly tracing
+gc_log = [] # log every GC cycle
+gc_stress = [] # force a collection on every allocation

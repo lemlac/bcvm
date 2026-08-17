@@ -15,11 +15,11 @@ fn name(vm: &mut Vm, s: &str) -> bcvm::value::ObjRef {
 // ---------------------------------------------------------------------------
 // Program 1: recursive Fibonacci
 //
-//   fn fib(n) {
-//       if (n < 2) return n;
-//       return fib(n - 1) + fib(n - 2);
-//   }
-//   print fib(21);
+// fn fib(n) {
+//     if (n < 2) return n;
+//     return fib(n - 1) + fib(n - 2);
+// }
+// print fib(21);
 // ---------------------------------------------------------------------------
 fn build_fib(vm: &mut Vm) -> bcvm::value::ObjRef {
     let fn_obj = new_function(vm);
@@ -103,9 +103,9 @@ fn build_fib_script(vm: &mut Vm, arg: i32) -> bcvm::value::ObjRef {
 // ---------------------------------------------------------------------------
 // Program 2: iterative sum 1..n
 //
-//   var i = 1; var sum = 0;
-//   while (i <= n) { sum = sum + i; i = i + 1; }
-//   print sum;
+// var i = 1; var sum = 0;
+// while (i <= n) { sum = sum + i; i = i + 1; }
+// print sum;
 // ---------------------------------------------------------------------------
 fn build_sum_loop(vm: &mut Vm, n: i32) -> bcvm::value::ObjRef {
     let script = new_function(vm);
@@ -123,7 +123,7 @@ fn build_sum_loop(vm: &mut Vm, n: i32) -> bcvm::value::ObjRef {
         c.emit_constant(Value::Number(0.0), 1); // sum = 0
 
         let loop_start = c.count();
-        // condition: NOT (i > n)  ≡  i <= n
+        // condition: NOT (i > n) ≡ i <= n
         c.emit_bytes(OpCode::GetLocal as u8, 1, 2);
         c.emit_constant(Value::Number(n as f64), 2);
         c.emit_op(OpCode::Greater, 2);
@@ -239,21 +239,143 @@ fn main() {
     run_program(&mut vm, "sum 1..100 via a while-loop", sum_script, trace);
 
     println!("\n===== gc demo (200,000 throwaway string concats) =====");
-    println!("bytesAllocated before:            {:8}", vm.bytes_allocated());
+    println!("bytesAllocated before:              {:8}", vm.bytes_allocated());
     let gc_script = build_gc_demo(&mut vm, 200_000);
     let r = vm.interpret(gc_script);
     if r == InterpretResult::RuntimeError {
         println!("(runtime error)");
     }
     println!(
-        "bytesAllocated right after loop:   {:8}  (heap-tracking GC already\n\
+        "bytesAllocated right after loop:    {:8}  (heap-tracking GC already\n\
          \x20                                           ran automatically mid-loop\n\
          \x20                                           as soon as the threshold was hit)",
         vm.bytes_allocated()
     );
     vm.collect_garbage();
     println!(
-        "bytesAllocated after explicit GC:  {:8}",
+        "bytesAllocated after explicit GC:   {:8}",
         vm.bytes_allocated()
     );
+}
+
+// ---------------------------------------------------------------------------
+// Unit tests — one per demo program, asserting on real results (via
+// `Vm::output()` and `Vm::bytes_allocated()`) instead of eyeballing stdout.
+// ---------------------------------------------------------------------------
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fib_21_via_recursive_calls() {
+        let mut vm = Vm::new();
+        let script = build_fib_script(&mut vm, 21);
+        let result = vm.interpret(script);
+
+        assert_eq!(result, InterpretResult::Ok);
+        assert_eq!(vm.output(), ["10946".to_string()]);
+    }
+
+    #[test]
+    fn fib_matches_known_sequence() {
+        // A couple of extra points on the curve, cheap insurance against an
+        // off-by-one in the base case or the recursive step individually.
+        for (n, expected) in [(0, "0"), (1, "1"), (10, "55")] {
+            let mut vm = Vm::new();
+            let script = build_fib_script(&mut vm, n);
+            assert_eq!(vm.interpret(script), InterpretResult::Ok);
+            assert_eq!(vm.output(), [expected.to_string()], "fib({n})");
+        }
+    }
+
+    #[test]
+    fn sum_1_to_100_via_while_loop() {
+        let mut vm = Vm::new();
+        let script = build_sum_loop(&mut vm, 100);
+        let result = vm.interpret(script);
+
+        assert_eq!(result, InterpretResult::Ok);
+        assert_eq!(vm.output(), ["5050".to_string()]);
+    }
+
+    #[test]
+    fn sum_loop_matches_gauss_formula() {
+        for n in [0, 1, 5, 37] {
+            let mut vm = Vm::new();
+            let script = build_sum_loop(&mut vm, n);
+            assert_eq!(vm.interpret(script), InterpretResult::Ok);
+            let expected = (n * (n + 1) / 2).to_string();
+            assert_eq!(vm.output(), [expected], "sum 1..{n}");
+        }
+    }
+
+    #[test]
+    fn gc_demo_completes_and_reclaims_garbage() {
+        let mut vm = Vm::new();
+        let before = vm.bytes_allocated();
+
+        // Same program as the demo, just fewer iterations so the test stays
+        // fast; the GC-stress shape (many throwaway string concats) is the
+        // same either way.
+        let script = build_gc_demo(&mut vm, 20_000);
+        let result = vm.interpret(script);
+
+        assert_eq!(result, InterpretResult::Ok);
+        assert_eq!(vm.output(), ["gc demo done".to_string()]);
+
+        let after_run = vm.bytes_allocated();
+        vm.collect_garbage();
+        let after_gc = vm.bytes_allocated();
+
+        // The collector should never leave *more* live than it found, and a
+        // final sweep after 20,000 throwaway concatenations should settle
+        // back down near baseline rather than keep growing unbounded.
+        assert!(after_gc <= after_run);
+        assert!(
+            after_gc < before + 4096,
+            "expected GC to reclaim the throwaway strings, but {after_gc} bytes are \
+             still live (baseline was {before})"
+        );
+    }
+
+    #[test]
+    fn gc_demo_full_scale_matches_original_program() {
+        // The exact program from main(): 200,000 iterations.
+        let mut vm = Vm::new();
+        let script = build_gc_demo(&mut vm, 200_000);
+        assert_eq!(vm.interpret(script), InterpretResult::Ok);
+        assert_eq!(vm.output(), ["gc demo done".to_string()]);
+    }
+
+    // -----------------------------------------------------------------
+    // Bonus regression test: this is the interning/rooting scenario we
+    // flagged in review — `track_object()` runs the GC-threshold check
+    // *after* a string has already been popped off the protecting stack
+    // push inside `copy_string`. If a collection fires in that window,
+    // the string can get swept (and pruned from the intern table) before
+    // it's ever registered as reachable.
+    //
+    // This only reproduces reliably with a collection forced on *every*
+    // allocation, so it's gated behind the `gc_stress` feature:
+    //     cargo test --features gc_stress interning_survives
+    // -----------------------------------------------------------------
+    #[cfg(feature = "gc_stress")]
+    #[test]
+    fn interning_survives_a_gc_triggered_mid_allocation() {
+        let mut vm = Vm::new();
+
+        let a = copy_string(&mut vm, "same-content");
+        let b = copy_string(&mut vm, "same-content");
+
+        // Two calls with identical content must yield the *same* interned
+        // object. If a GC fired between the intern-table insert and
+        // track_object() finishing, `a` could have been pruned from the
+        // strings table already, and `b` would allocate a distinct object.
+        assert!(
+            std::rc::Rc::ptr_eq(&a, &b),
+            "expected copy_string to return the same interned Rc twice for identical \
+             content, got two different allocations — a GC likely ran between interning \
+             and tracking the object"
+        );
+    }
 }

@@ -44,6 +44,11 @@ pub struct Vm {
 
     /// When true, print stack + current instruction each step.
     pub trace_execution: bool,
+
+    /// Every string a script `print`s, in order — lets tests assert on
+    /// program output without capturing real stdout. The real `println!`
+    /// still happens too, so `cargo run` behaves exactly as before.
+    output: Vec<String>,
 }
 
 impl Vm {
@@ -58,6 +63,7 @@ impl Vm {
             next_gc: GC_INITIAL_THRESHOLD,
             gray_stack: Vec::new(),
             trace_execution: false,
+            output: Vec::new(),
         };
         vm.define_native("clock", clock_native);
         vm
@@ -406,7 +412,9 @@ impl Vm {
 
                 OpCode::Print => {
                     let v = self.pop();
-                    println!("{}", v);
+                    let s = format!("{}", v);
+                    println!("{}", s);
+                    self.output.push(s);
                 }
 
                 OpCode::Jump => {
@@ -606,6 +614,11 @@ impl Vm {
 
     pub fn bytes_allocated(&self) -> usize {
         self.bytes_allocated
+    }
+
+    /// Every string printed by `OP_PRINT` so far, in order.
+    pub fn output(&self) -> &[String] {
+        &self.output
     }
 }
 

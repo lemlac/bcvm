@@ -211,7 +211,7 @@ impl fmt::Display for Obj {
     }
 }
 
-/// Interned string object.  The characters live inside the object so the
+/// Interned string object. The characters live inside the object so the
 /// GC can free the whole thing in one go.
 #[derive(Debug, Clone)]
 pub struct ObjString {

@@ -1,7 +1,7 @@
 //! Bytecode chunks, the constant pool, and a small assembler API.
 //!
 //! A `Chunk` is a flat array of opcodes + operands, a parallel line-number
-//! table, and a constant pool.  The emit_* helpers are what a real compiler
+//! table, and a constant pool. The emit_* helpers are what a real compiler
 //! front-end would call.
 
 use crate::value::{Value, ValueArray};
@@ -10,16 +10,16 @@ use crate::value::{Value, ValueArray};
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpCode {
-    Const = 0,        // operand: 1-byte constant index
+    Const = 0, // operand: 1-byte constant index
     Nil,
     True,
     False,
     Pop,
     Dup,
 
-    GetLocal,         // operand: 1-byte frame-relative slot
+    GetLocal, // operand: 1-byte frame-relative slot
     SetLocal,
-    GetGlobal,        // operand: 1-byte constant index → name
+    GetGlobal, // operand: 1-byte constant index → name
     DefineGlobal,
     SetGlobal,
 
@@ -36,11 +36,11 @@ pub enum OpCode {
 
     Print,
 
-    Jump,             // operand: 2-byte forward offset
-    JumpIfFalse,      // operand: 2-byte forward offset
-    Loop,             // operand: 2-byte backward offset
+    Jump, // operand: 2-byte forward offset
+    JumpIfFalse, // operand: 2-byte forward offset
+    Loop, // operand: 2-byte backward offset
 
-    Call,             // operand: 1-byte arg count
+    Call, // operand: 1-byte arg count
     Return,
 
     Halt,
