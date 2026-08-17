@@ -293,16 +293,14 @@ pub fn copy_string(vm: &mut Vm, chars: &str) -> ObjRef {
     if let Some(existing) = vm.strings.find_string(chars, hash) {
         return existing;
     }
-
     let s = ObjString::new(chars.to_owned(), hash);
     let obj = Rc::new(RefCell::new(Obj::String(s)));
 
-    // Protect from GC while we insert into the intern table.
-    vm.push(Value::Obj(Rc::clone(&obj)));
+    vm.push(Value::Obj(Rc::clone(&obj)));   // protect...
     vm.strings.set(Rc::clone(&obj), Value::Nil);
-    vm.pop();
+    vm.track_object(Rc::clone(&obj));       // ...through the GC-triggering call...
+    vm.pop();                               // ...then release
 
-    vm.track_object(Rc::clone(&obj));
     obj
 }
 
