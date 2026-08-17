@@ -96,8 +96,6 @@ pub struct Chunk {
     pub code: Vec<u8>,
     pub lines: Vec<i32>,
     pub constants: ValueArray,
-    /// Used by the VM to keep an intrusive list of every chunk (permanent roots).
-    pub(crate) registered: bool,
 }
 
 impl Chunk {
@@ -106,7 +104,6 @@ impl Chunk {
             code: Vec::new(),
             lines: Vec::new(),
             constants: ValueArray::new(),
-            registered: false,
         }
     }
 

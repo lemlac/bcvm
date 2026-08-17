@@ -306,12 +306,9 @@ pub fn copy_string(vm: &mut Vm, chars: &str) -> ObjRef {
     obj
 }
 
-/// Create a fresh function object and register its chunk as a permanent root.
+/// Create a fresh function object.
 pub fn new_function(vm: &mut Vm) -> ObjRef {
-    let mut fn_ = ObjFunction::new();
-    // The chunk is owned by the function; we still register it so its
-    // constant pool is a permanent GC root (mirrors the C design).
-    vm.register_chunk(&mut fn_.chunk);
+    let fn_ = ObjFunction::new();
     let obj = Rc::new(RefCell::new(Obj::Function(fn_)));
     vm.track_object(Rc::clone(&obj));
     obj

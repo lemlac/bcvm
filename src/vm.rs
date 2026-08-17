@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use crate::chunk::{Chunk, OpCode};
+use crate::chunk::OpCode;
 use crate::common::{FRAMES_MAX, GC_HEAP_GROW_FACTOR, GC_INITIAL_THRESHOLD, STACK_MAX};
 use crate::debug::disassemble_instruction;
 use crate::table::Table;
@@ -36,9 +36,6 @@ pub struct Vm {
     /// All live heap objects (for the sweep phase).
     objects: Vec<ObjRef>,
 
-    /// Every chunk ever created (permanent GC roots for their constant pools).
-    all_chunks: Vec<*mut Chunk>, // raw pointers; lifetime is tied to the owning function / main
-
     bytes_allocated: usize,
     next_gc: usize,
 
@@ -57,7 +54,6 @@ impl Vm {
             globals: Table::new(),
             strings: Table::new(),
             objects: Vec::new(),
-            all_chunks: Vec::new(),
             bytes_allocated: 0,
             next_gc: GC_INITIAL_THRESHOLD,
             gray_stack: Vec::new(),
@@ -111,13 +107,6 @@ impl Vm {
             if self.bytes_allocated > self.next_gc {
                 self.collect_garbage();
             }
-        }
-    }
-
-    pub fn register_chunk(&mut self, chunk: &mut Chunk) {
-        if !chunk.registered {
-            chunk.registered = true;
-            self.all_chunks.push(chunk as *mut Chunk);
         }
     }
 
@@ -264,14 +253,10 @@ impl Vm {
                 }
                 println!();
                 let ip = self.frames[frame_idx].ip;
-                let chunk = {
-                    // We need a short-lived borrow of the chunk.
-                    let fn_ = self.frames[frame_idx].function.borrow();
-                    // Safety: we only read; the chunk won't be mutated while we disassemble.
-                    let ptr = &fn_.as_function().chunk as *const Chunk;
-                    unsafe { &*ptr }
-                };
-                disassemble_instruction(chunk, ip);
+                // Borrow the function for the duration of disassembly only.
+                let fn_ = self.frames[frame_idx].function.borrow();
+                disassemble_instruction(&fn_.as_function().chunk, ip);
+                drop(fn_);
             }
 
             // Read the next instruction.
@@ -539,6 +524,8 @@ impl Vm {
 
     fn mark_roots(&mut self) {
         // Collect roots first to avoid simultaneous borrows of `self`.
+        // Reachability is: value stack → open call frames → globals table.
+        // Function constant pools are traced via blacken when a function is marked.
         let mut roots: Vec<ObjRef> = Vec::new();
 
         for v in &self.stack {
@@ -552,17 +539,6 @@ impl Vm {
 
         // Globals (keys + values)
         self.globals.mark(&mut |o| roots.push(o));
-
-        // Constant pools of every registered chunk (permanent roots)
-        for &chunk_ptr in &self.all_chunks {
-            // Safety: chunks live as long as the VM (owned by functions or main).
-            let chunk = unsafe { &*chunk_ptr };
-            for v in &chunk.constants.values {
-                if let Value::Obj(o) = v {
-                    roots.push(Rc::clone(o));
-                }
-            }
-        }
 
         for o in roots {
             self.mark_object(o);
