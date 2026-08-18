@@ -1,0 +1,15 @@
+[package]
+name = "bcvm"
+version = "0.1.0"
+edition = "2021"
+description = "A stack-based bytecode virtual machine (Rust port of lemlac/bcvm)"
+license = "MIT"
+authors = ["ported from lemlac/bcvm"]
+
+[dependencies]
+
+[features]
+default = []
+trace = [] # enable per-instruction stack + disassembly tracing
+gc_log = [] # log every GC cycle
+gc_stress = [] # force a collection on every allocation
